@@ -11,7 +11,7 @@
 Copyright (c) 2017 - 2018 m0slevin, all rights reserved.
 See license.txt for more information
 ===========================================================================*/
-/*!
+/**
     @file statemachine.h
     @brief Implements a generic and extensible state-machine framework
 */
@@ -22,23 +22,22 @@ See license.txt for more information
 
 namespace Mark3
 {
-
 //---------------------------------------------------------------------------
 // Possible state handler return codes
 typedef enum {
-    STATE_RETURN_OK,            //!< Handler returned successfully
-    STATE_RETURN_UNHANDLED,     //!< Event not handled by state handler
-    STATE_RETURN_TRANSITION     //!< Event handling resulted in state transition
+    STATE_RETURN_OK,        //!< Handler returned successfully
+    STATE_RETURN_UNHANDLED, //!< Event not handled by state handler
+    STATE_RETURN_TRANSITION //!< Event handling resulted in state transition
 } StateReturn_t;
 
 //---------------------------------------------------------------------------
 // Possible state machine operations
 typedef enum {
-    STATE_OPCODE_RETURN,        //!< Event was consumed, no further operations
-    STATE_OPCODE_RUN_STATE,     //!< Run the state machine
-    STATE_OPCODE_PUSH_STATE,    //!< Push the current state to the stack
-    STATE_OPCODE_POP_STATE,     //!< Pop the current state from the stack
-    STATE_OPCODE_TRANSITION,    //!< Transition to a new state within the current level
+    STATE_OPCODE_RETURN,     //!< Event was consumed, no further operations
+    STATE_OPCODE_RUN_STATE,  //!< Run the state machine
+    STATE_OPCODE_PUSH_STATE, //!< Push the current state to the stack
+    STATE_OPCODE_POP_STATE,  //!< Pop the current state from the stack
+    STATE_OPCODE_TRANSITION, //!< Transition to a new state within the current level
 } StateOpcode_t;
 
 //---------------------------------------------------------------------------
@@ -55,13 +54,13 @@ typedef StateReturn_t (*StateHandler_t)(StateMachine* pclSM_, const void* pvEven
 //---------------------------------------------------------------------------
 // State structure definition
 typedef struct {
-    StateChangeHandler_t pfEntry;   //!< (optional) Function called on state entry
-    StateHandler_t pfRun;           //!< Function called when running state
-    StateChangeHandler_t pfExit;    //!< (optional) Function called on state exit
+    StateChangeHandler_t pfEntry; //!< (optional) Function called on state entry
+    StateHandler_t       pfRun;   //!< Function called when running state
+    StateChangeHandler_t pfExit;  //!< (optional) Function called on state exit
 } State_t;
 
 //---------------------------------------------------------------------------
-#define MAX_STATE_STACK_DEPTH           (8)
+#define MAX_STATE_STACK_DEPTH (8)
 
 //---------------------------------------------------------------------------
 /**
@@ -79,7 +78,8 @@ typedef struct {
  * pushing and popping states from the state machine's stack.
  *
  */
-class StateMachine {
+class StateMachine
+{
 public:
     /**
      * @brief SetStates
@@ -134,7 +134,7 @@ public:
      * and processes.
      */
     void HandleEvent(const void* pvEvent_);
-    
+
     /**
      * @brief PushState
      *
@@ -163,8 +163,8 @@ public:
      * @param u16StateIdx_ Index corresponding to the state to be entered
      */
     void TransitionState(uint16_t u16StateIdx_);
-    
-private:        
+
+private:
     /**
      * @brief SetOpcode
      *
@@ -184,16 +184,16 @@ private:
      * @return true if an opcode was a returned, false if no opcode pending
      */
     bool GetOpcode(StateOpcode_t* peOpcode_);
-    
-    StateOpcode_t   m_eOpcode;        //!< Pending state machine opcode
-    bool            m_bOpcodeSet;     //!< Indicates the state machine has a pending opcode
-    uint16_t        m_u16NextState;   //!< Next state to run
-    
-    void*           m_pvContext;      //!< User context, passed in via SetContext()
-    const State_t*  m_pstStateList;   //!< Pointer to the state handler array used by this state machine
-    uint16_t        m_u16StateCount;  //!< Number of states in the state array    
-    
-    uint16_t    m_u16StackDepth;      //!< Current stack level in the state machine
-    uint16_t    m_au16StateStack[MAX_STATE_STACK_DEPTH];    //!< State stack
+
+    StateOpcode_t m_eOpcode;      //!< Pending state machine opcode
+    bool          m_bOpcodeSet;   //!< Indicates the state machine has a pending opcode
+    uint16_t      m_u16NextState; //!< Next state to run
+
+    void*          m_pvContext;     //!< User context, passed in via SetContext()
+    const State_t* m_pstStateList;  //!< Pointer to the state handler array used by this state machine
+    uint16_t       m_u16StateCount; //!< Number of states in the state array
+
+    uint16_t m_u16StackDepth;                         //!< Current stack level in the state machine
+    uint16_t m_au16StateStack[MAX_STATE_STACK_DEPTH]; //!< State stack
 };
-} //namespace Mark3
+} // namespace Mark3
