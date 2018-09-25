@@ -148,6 +148,7 @@ bool StateMachine::SetOpcode(StateOpcode eOpcode_)
         // in a single path
         if (m_pfErrorHandler != nullptr) {
             StateErrorData_t stError;
+            stError.eType = StateErrorType::ambiguous_operation;
             stError.ambiguousOperation.eAmbiguousOp = eOpcode_;
             stError.ambiguousOperation.eInitialOp = m_eOpcode;
             stError.ambiguousOperation.u16CurrentState = GetCurrentState();
