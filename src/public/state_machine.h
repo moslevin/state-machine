@@ -12,7 +12,7 @@ Copyright (c) 2017 - 2018 m0slevin, all rights reserved.
 See license.txt for more information
 ===========================================================================*/
 /**
-    @file statemachine.h
+    @file state_machine.h
     @brief Implements a generic and extensible state-machine framework
 */
 
@@ -23,22 +23,27 @@ See license.txt for more information
 namespace Mark3
 {
 //---------------------------------------------------------------------------
-// Possible state handler return codes
-typedef enum {
-    STATE_RETURN_OK,        //!< Handler returned successfully
-    STATE_RETURN_UNHANDLED, //!< Event not handled by state handler
-    STATE_RETURN_TRANSITION //!< Event handling resulted in state transition
-} StateReturn_t;
+/**
+ * Possible state handler return codes
+ */
+enum class StateReturn : uint8_t{
+    ok,        //!< Handler returned successfully
+    unhandled, //!< Event not handled by state handler
+    transition //!< Event handling resulted in state transition
+};
 
 //---------------------------------------------------------------------------
-// Possible state machine operations
-typedef enum {
-    STATE_OPCODE_RETURN,     //!< Event was consumed, no further operations
-    STATE_OPCODE_RUN_STATE,  //!< Run the state machine
-    STATE_OPCODE_PUSH_STATE, //!< Push the current state to the stack
-    STATE_OPCODE_POP_STATE,  //!< Pop the current state from the stack
-    STATE_OPCODE_TRANSITION, //!< Transition to a new state within the current level
-} StateOpcode_t;
+/**
+ * Possible state machine operations
+ */
+enum class StateOpcode : uint8_t {
+    returned,     //!< Event was consumed, no further operations
+    run,  //!< Run the state machine
+    push, //!< Push the current state to the stack
+    pop,  //!< Pop the current state from the stack
+    transition, //!< Transition to a new state within the current level
+    unhandled, //!< Event was not handled by any handler in the stack
+};
 
 //---------------------------------------------------------------------------
 // Forward declaration
@@ -49,7 +54,36 @@ class StateMachine;
 typedef void (*StateChangeHandler_t)(StateMachine* pclSM_);
 
 // Function pointer type used for implementing active state handlers
-typedef StateReturn_t (*StateHandler_t)(StateMachine* pclSM_, const void* pvEvent_);
+typedef StateReturn (*StateHandler_t)(StateMachine* pclSM_, const void* pvEvent_);
+
+// Define error types that are propagated to error handler functions
+enum class StateErrorType : uint8_t {
+    ambiguous_operation,
+    invalid_state,
+    state_stack_overflow,
+    state_stack_underflow
+};
+
+// Struct that defines error event data
+typedef struct {
+    StateErrorType eType;
+    union {
+        struct {
+            StateOpcode eInitialOp;
+            StateOpcode eAmbiguousOp;
+            uint16_t u16StartState;
+            uint16_t u16CurrentState;
+        } ambiguousOperation;
+        struct {
+            uint16_t u16InvalidState;
+        } invalidState;
+        struct {
+            uint16_t u16FailedState;
+        } stateStackOverflow;
+    };
+} StateErrorData_t;
+
+typedef void (*StateErrorHandler_t)(StateMachine* pclSM_, const StateErrorData_t* pstOpData_);
 
 //---------------------------------------------------------------------------
 // State structure definition
@@ -81,16 +115,19 @@ typedef struct {
 class StateMachine
 {
 public:
+    StateMachine();
     /**
      * @brief SetStates
      *
      * Set the state table on which the object executes.  This table
-     * must exist for the lifespan of the state machine.
+     * must exist for the lifespan of the state machine.  Must only
+     * be set once per instance.
      *
      * @param pstStates_ pointer to the state machine table
      * @param u16StateCount_ number of states held in the table
+     * @return true on success, false if called multiple times
      */
-    void SetStates(const State_t* pstStates_, uint16_t u16StateCount_);
+    bool SetStates(const State_t* pstStates_, uint16_t u16StateCount_);
 
     /**
      * @brief SetContext
@@ -105,14 +142,14 @@ public:
     void SetContext(void* pvContext_);
 
     /**
-     * @brief GetContex
+     * @brief GetContext
      *
      * Retrieve a pointer to the context object held by the state machine.
      * @sa SetContext
      *
      * @return Pointer to the context object, or NULL if no context set.
      */
-    void* GetContex();
+    void* GetContext();
 
     /**
      * @brief Begin
@@ -121,9 +158,11 @@ public:
      * first state in the table.  Requires that SetStates has been previously
      * called.
      *
+     * @return true if successfully initialized, false otherwise
+     *
      * @sa SetStates
      */
-    void Begin();
+    bool Begin();
 
     /**
      * @brief HandleEvent
@@ -133,7 +172,7 @@ public:
      * @param pvEvent_ Stimulus object, which the state machine interprets
      * and processes.
      */
-    void HandleEvent(const void* pvEvent_);
+    StateReturn HandleEvent(const void* pvEvent_);
 
     /**
      * @brief PushState
@@ -142,8 +181,10 @@ public:
      * index in the state table.
      *
      * @param u16StateIdx_ Index of the new state to be run
+     * @return true on success, false if operation is ambiguous (i.e. other transitions
+     * or push/pop operations take place within the same handler call)
      */
-    void PushState(uint16_t u16StateIdx_);
+    bool PushState(uint16_t u16StateIdx_);
 
     /**
      * @brief PopState
@@ -151,8 +192,10 @@ public:
      * Exit out of the current state, and resume execution of the state machine at the
      * state held in the state machine VM's stack.
      *
+     * @return true on success, false if operation is ambiguous (i.e. other transitions
+     * or push/pop operations take place within the same context)
      */
-    void PopState();
+    bool PopState();
 
     /**
      * @brief TransitionState
@@ -161,8 +204,39 @@ public:
      * specified by its index in the state table
      *
      * @param u16StateIdx_ Index corresponding to the state to be entered
+     * @return true on success, false if operation is ambiguous (i.e. other transitions
+     * or push/pop operations take place within the same context)
      */
-    void TransitionState(uint16_t u16StateIdx_);
+    bool TransitionState(uint16_t u16StateIdx_);
+
+    /**
+     * @brief GetCurrentState
+     *
+     * Retrieve the current state being handled in the state machine
+     *
+     * @return index of the current state machine's running state
+     */
+    uint16_t GetCurrentState();
+
+    /**
+     * @brief GetStackDepth
+     *
+     * Retrieve the current state machine's stack depth (number of
+     * states "pushed")
+     *
+     * @return current stack depth
+     */
+    uint16_t GetStackDepth();
+
+    /**
+     * @brief SetErrorHandler
+     *
+     * Register an error handler function, invoked when a fatal
+     * state machine error is encountered.
+     *
+     * @param pfHandler_ State error-handler function pointer
+     */
+    void SetErrorHandler(StateErrorHandler_t pfHandler_);
 
 private:
     /**
@@ -173,7 +247,7 @@ private:
      * @param eOpcode_ next opcode to run
      * @return true on success, false if opcode already pending
      */
-    bool SetOpcode(StateOpcode_t eOpcode_);
+    bool SetOpcode(StateOpcode eOpcode_);
 
     /**
      * @brief GetOpcode
@@ -183,9 +257,12 @@ private:
      * @param peOpcode_ [out] opcode read from the state machine
      * @return true if an opcode was a returned, false if no opcode pending
      */
-    bool GetOpcode(StateOpcode_t* peOpcode_);
+    bool GetOpcode(StateOpcode* peOpcode_);
 
-    StateOpcode_t m_eOpcode;      //!< Pending state machine opcode
+    bool m_bStatesSet; //!< Wheter or not states are configured
+
+    StateOpcode   m_eOpcode;      //!< Pending state machine
+
     bool          m_bOpcodeSet;   //!< Indicates the state machine has a pending opcode
     uint16_t      m_u16NextState; //!< Next state to run
 
@@ -195,5 +272,8 @@ private:
 
     uint16_t m_u16StackDepth;                         //!< Current stack level in the state machine
     uint16_t m_au16StateStack[MAX_STATE_STACK_DEPTH]; //!< State stack
+
+    StateErrorHandler_t m_pfErrorHandler;    //!< Function called on state machine ambiguity.
+    uint16_t m_u16OpSetState;
 };
 } // namespace Mark3
